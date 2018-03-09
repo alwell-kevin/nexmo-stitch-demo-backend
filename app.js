@@ -12,10 +12,10 @@ app.use(bodyParser.json({
     type: 'application/json'
 }));
 
-app.all('/createuser', function (req, res) {
+app.post('/createuser', function (req, res) {
     console.log("IN CREATE USER: ", req.body)
 
-    nexmoIntegration.createUser(req.body.query.userName);
+    nexmoIntegration.createUser("Kevin@aol.com", true);
     res.sendStatus(200);
 })
 

@@ -1,7 +1,6 @@
 var Nexmo = require('nexmo');
 var Conversation = require('nexmo-conversation')
 var request = require('request');
-var ConvClient = require('../node_modules/nexmo-conversation/dist/conversationClient.js')
 var application;
 
 var nexmo = new Nexmo({
@@ -11,68 +10,130 @@ var nexmo = new Nexmo({
     privateKey: process.env.NEXMO_PRIVATE_KEY,
 });
 
-const getJwt = () => {
-    if (!jwt) {
-        var jwt = nexmo.generateJwt();
+const adminAcl = {
+    "paths": {
+        "/v1/sessions/**": {},
+        "/v1/users/**": {},
+        "/v1/conversations/**": {}
     }
-
-    return jwt
 }
 
-const createClientInstance = () => {
-    var rtc = new ConvClient({
-        debug: false
-    });
-    // var token = request login token as above, with sub=<username>
-    rtc.login(getJwt()).then(
-        function (app) {
-            application = app;
-            // use the application object to manage the conversations
-            // access the available conversations
-            console.log("APPLICATION CONVS: ", application.conversations);
-        }
-    );
-
-}
-
-const createConversation = () => {
-    var conversationData = {
-        display_name: 'Nexmo Conversation'
-    };
-    application.newConversation(conversationData).then(
-        function (conversation) {
-            // join the created conversation
-            conversation.join().then(
-                function (member) {
-                    console.log("Joined as " + member.user.name);
-                });
-        }).catch(function (error) {
-        console.log(error);
-    });
-}
-
-const createUser = (userName) => {
-    var options = {
-        method: "POST",
-        url: process.env.NEXMO_STITCH_BASE_URL + "/users",
-        qs: {
-            name: userName
+const nonAdminAcl = {
+    "paths": {
+        "/v1/sessions/**": {
+            "methods": ["GET"]
         },
-        headers: {
-            'User-Agent': 'request',
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer ' + getJwt()
+        "/v1/users/*": {
+            "methods": ["GET"]
+        },
+        "/v1/conversations/*": {
+            "methods": ["GET", "POST", "PUT"]
         }
-    };
+    }
+}
 
-    request(options, function (error, response, body) {
-        console.log('error:', error);
-        console.log('statusCode:', response && response.statusCode);
-        console.log('body:', body);
+//PROMISIFY ME
+const createConversation = (displayName) => {
+    var displayName = "Chat Demo"
+
+    nexmo.conversations.create({
+        display_name: displayName
+    }, (error, response) => {
+        if (error) {
+            return error
+        } else {
+            return response
+        }
+    })
+}
+
+//promisify me
+const modifyConversation = (conversationId, userId, action) => {
+    nexmo.conversations.members.add(conversationId, {
+        "action": action,
+        "user_id": userId,
+        "channel": {
+            "type": "app"
+        }
+    }, (error, response) => {
+        if (error) {
+            return error
+        } else {
+            return response
+        }
+    })
+}
+
+const getConversations = () => {
+    nexmo.conversations.get({}, (error, response) => {
+        if (error) {
+            return error
+        } else {
+            return response
+        }
     });
 }
 
-module.exports.getJwt = getJwt;
-module.exports.createClientInstance = createClientInstance;
-module.exports.createConversation = createConversation;
+//PROMISIFY ME
+const createUser = (userName, admin) => {
+    nexmo.users.create({
+        name: username
+    }, (error, response) => {
+        if (error) {
+            return error
+        } else {
+            res.json({
+                user: response,
+                user_jwt: Nexmo.generateJwt(process.env.NEXMO_API_KEY, {
+                    application_id: process.env.NEXMO_APP_ID,
+                    sub: username,
+                    exp: new Date().getTime() + 86400,
+                    acl: admin ?
+                        adminAcl : nonAdminAcl
+                })
+            })
+        }
+    })
+}
+
+//promisify me
+const getUsers = () => {
+    nexmo.users.get({}, (error, response) => {
+        if (error) {
+            return error
+        } else {
+            return response
+        }
+    });
+}
+
+const getUser = () => {
+    var admin = req.query.admin
+    nexmo.users.get({}, (error, response) => {
+        if (error) {
+            res.json(error)
+        } else {
+            var filteredUsers = response.filter(user => user.name == req.params.user)
+            if (filteredUsers.length === 0) {
+                res.json({
+                    error: "User not found"
+                })
+            } else {
+                res.json({
+                    user_jwt: Nexmo.generateJwt(process.env.NEXMO_API_KEY, {
+                        application_id: process.env.NEXMO_APP_ID,
+                        sub: req.params.user,
+                        exp: new Date().getTime() + 86400,
+                        acl: admin ?
+                            adminAcl : nonAdminAcl
+                    })
+                });
+            }
+        }
+    });
+}
 module.exports.createUser = createUser;
+module.exports.getUsers = getUsers;
+module.exports.getJwt = getJwt;
+module.exports.createConversation = createConversation;
+module.exports.modifyConversation = modifyConversation;
